@@ -4,6 +4,7 @@ import type { DeviationSummary } from '../types/firing'
 defineProps<{
   summary: DeviationSummary
   offsetMin: number
+  recalculated?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   <section class="deviation-panel">
     <div class="deviation-heading">
       <div><strong>记录仪偏差</strong><span>实际温度按统一时间轴与目标曲线插值比较</span></div>
+      <span v-if="recalculated" class="recalc-badge">已按新曲线重算</span>
       <label>
         <span>时间偏移</span>
         <input
@@ -46,6 +48,7 @@ const emit = defineEmits<{
 .deviation-heading > div > span { margin-top: 3px; color: #899995; font-size: 10px; }
 .deviation-heading label { display: flex; align-items: center; gap: 5px; color: #81918d; font-size: 10px; }
 .deviation-heading input { width: 68px; height: 30px; padding: 0 7px; border: 1px solid #cad6d2; border-radius: 5px; color: #3f5550; }
+.recalc-badge { padding: 2px 8px; border-radius: 999px; background: #e5f3e8; color: #34774c; font-size: 10px; white-space: nowrap; }
 .deviation-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
 .deviation-grid div { padding: 10px; border-radius: 7px; background: #f2f6f5; }
 .deviation-grid span, .deviation-grid strong { display: block; }

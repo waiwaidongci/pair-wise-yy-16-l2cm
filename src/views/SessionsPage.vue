@@ -12,6 +12,8 @@ const store = useFiringStore()
 const { activeSession } = storeToRefs(store)
 const fileInput = ref<HTMLInputElement>()
 const importMessage = ref('')
+const importFailed = ref(false)
+const lastCsvFile = ref<File | null>(null)
 
 function openFile() {
   fileInput.value?.click()
@@ -20,14 +22,25 @@ function openFile() {
 async function importCsv(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
+  await runImport(file)
+  ;(event.target as HTMLInputElement).value = ''
+}
+
+async function runImport(file: File) {
+  lastCsvFile.value = file
   const samples = parseTemperatureCsv(await file.text())
   if (!samples.length) {
-    importMessage.value = '未解析到有效记录，请确认 CSV 包含 time,temp 两列。'
+    importFailed.value = true
+    importMessage.value = '未解析到有效记录，请确认 CSV 包含 time,temp 两列。本地实测数据未改动，可重试。'
   } else {
+    importFailed.value = false
     store.importSamples(samples)
     importMessage.value = `已导入 ${samples.length} 个温度采样点。`
   }
-  ;(event.target as HTMLInputElement).value = ''
+}
+
+function retryImport() {
+  if (lastCsvFile.value) void runImport(lastCsvFile.value)
 }
 </script>
 
@@ -63,6 +76,7 @@ async function importCsv(event: Event) {
           <div class="session-card__meta">
             <span>{{ session.points.length }} 个目标关键点</span>
             <span>{{ session.actualSamples.length }} 个实测点</span>
+            <span>修订 rev {{ session.rev }}</span>
           </div>
         </button>
       </article>
@@ -102,7 +116,10 @@ async function importCsv(event: Event) {
           <Button label="选择文件" icon="pi pi-upload" outlined @click="openFile" />
           <Button v-if="activeSession.actualSamples.length" label="清除实测" severity="danger" text @click="store.clearActualSamples" />
         </div>
-        <p v-if="importMessage" class="import-message">{{ importMessage }}</p>
+        <p v-if="importMessage" class="import-message" :class="{ 'import-message--error': importFailed }">
+          <span>{{ importMessage }}</span>
+          <Button v-if="importFailed" label="重试" icon="pi pi-replay" size="small" text @click="retryImport" />
+        </p>
 
         <div class="sample-summary">
           <strong>当前实测数据</strong>

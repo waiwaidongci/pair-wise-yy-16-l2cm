@@ -34,8 +34,26 @@ const previewSession = computed<KilnSession>(() => {
     firedAt: '',
     status: 'draft',
     timeOffsetMin: 0,
-    points: template.points.map((point, index) => ({ ...point, id: `preview-point-${index}` })),
+    timeOffsetRev: 1,
+    points: template.points.map((point, index) => ({ ...point, id: `preview-point-${index}`, rev: 1 })),
     actualSamples: [],
+    rev: 1,
+    baseRev: 1,
+    pendingConflicts: [],
+    baseSnapshot: {
+      rev: 1,
+      baseRev: 1,
+      name: template.name,
+      kiln: '预览',
+      clay: template.clay,
+      glaze: template.glaze,
+      firedAt: '',
+      status: 'draft',
+      timeOffsetMin: 0,
+      timeOffsetRev: 1,
+      points: template.points.map((point, index) => ({ ...point, id: `preview-point-${index}`, rev: 1 })),
+      actualSamples: [],
+    },
   }
 })
 

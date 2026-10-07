@@ -1,20 +1,41 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { createMockSessions, MOCK_TEMPLATES } from '../data/mockSessions'
-import type { CurveTemplate, FiringPoint, FiringSample, KilnSession } from '../types/firing'
+import type {
+  CurveTemplate,
+  FiringPoint,
+  FiringSample,
+  KilnSession,
+  PendingConflict,
+} from '../types/firing'
 import { cloneSession, templateToPoints, validateCurve } from '../utils/curve'
+import {
+  downloadSessionJson,
+  forkRemoteSession,
+  mergeSessions,
+  migrateSession,
+  parseSessionImport,
+  snapshotSession,
+  type MergeOutcome,
+  type MergeStats,
+} from '../utils/merge'
 
 const STORAGE_KEY = 'pair-wise-yy-16-firing-studio'
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) as {
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as {
       sessions: KilnSession[]
       templates: CurveTemplate[]
       activeSessionId: string
       overlaySessionIds: string[]
-    } : null
+    }
+    return {
+      ...parsed,
+      sessions: (parsed.sessions ?? []).map(migrateSession),
+    }
   } catch {
     return null
   }
@@ -22,7 +43,9 @@ function loadState() {
 
 export const useFiringStore = defineStore('firing-studio', () => {
   const persisted = loadState()
-  const sessions = ref<KilnSession[]>(persisted?.sessions?.length ? persisted.sessions : createMockSessions())
+  const sessions = ref<KilnSession[]>(
+    persisted?.sessions?.length ? persisted.sessions : createMockSessions().map(migrateSession),
+  )
   const templates = ref<CurveTemplate[]>(persisted?.templates?.length ? persisted.templates : MOCK_TEMPLATES)
   const activeSessionId = ref(
     persisted?.activeSessionId && sessions.value.some((item) => item.id === persisted.activeSessionId)
@@ -39,6 +62,12 @@ export const useFiringStore = defineStore('firing-studio', () => {
   const redoStack = ref<Array<{ sessions: KilnSession[]; activeSessionId: string }>>([])
   const dragHistoryPending = ref(false)
 
+  // 合并 / 导入相关的瞬时状态（不持久化）
+  const lastImportPayload = ref<string | null>(null)
+  const lastImportError = ref<string | null>(null)
+  const lastMergeStats = ref<MergeStats | null>(null)
+  const lastMergeAt = ref<number | null>(null)
+
   const activeSession = computed(
     () => sessions.value.find((session) => session.id === activeSessionId.value) ?? sessions.value[0],
   )
@@ -49,6 +78,7 @@ export const useFiringStore = defineStore('firing-studio', () => {
   })
   const canUndo = computed(() => undoStack.value.length > 0)
   const canRedo = computed(() => redoStack.value.length > 0)
+  const pendingConflictCount = computed(() => activeSession.value.pendingConflicts.length)
 
   function persist() {
     localStorage.setItem(
@@ -114,6 +144,7 @@ export const useFiringStore = defineStore('firing-studio', () => {
     activeSessionId.value = id
     selectedPointId.value = activeSession.value.points[0]?.id ?? null
     selectedStageIndex.value = 0
+    lastMergeAt.value = null
     persist()
   }
 
@@ -126,43 +157,50 @@ export const useFiringStore = defineStore('firing-studio', () => {
     const next = sorted[index + 1]
     const minTime = previous ? previous.timeMin + 1 : 0
     const maxTime = next ? next.timeMin - 1 : 1440
+    const newRev = session.rev + 1
     session.points = session.points.map((point) =>
       point.id === pointId
         ? {
             ...point,
             timeMin: Math.round(Math.min(maxTime, Math.max(minTime, timeMin))),
             tempC: Math.round(Math.min(1450, Math.max(0, tempC))),
+            rev: newRev,
           }
         : point,
     )
+    session.rev = newRev
     sessions.value = [...sessions.value]
     persist()
   }
 
   function addPointAfterStage(stageIndex: number) {
     recordHistory()
-    const stages = [...activeSession.value.points].sort((a, b) => a.timeMin - b.timeMin)
+    const session = activeSession.value
+    const stages = [...session.points].sort((a, b) => a.timeMin - b.timeMin)
     const start = stages[stageIndex]
     const end = stages[stageIndex + 1]
     if (!start || !end) return
-    const middleTime = Math.round((start.timeMin + end.timeMin) / 2)
-    const middleTemp = Math.round((start.tempC + end.tempC) / 2)
-    const point = {
+    const newRev = session.rev + 1
+    const point: FiringPoint = {
       id: `point-${crypto.randomUUID()}`,
-      timeMin: middleTime,
-      tempC: middleTemp,
+      timeMin: Math.round((start.timeMin + end.timeMin) / 2),
+      tempC: Math.round((start.tempC + end.tempC) / 2),
+      rev: newRev,
     }
-    activeSession.value.points = [...activeSession.value.points, point]
+    session.points = [...session.points, point]
+    session.rev = newRev
     selectedPointId.value = point.id
     selectedStageIndex.value = stageIndex + 1
     persist()
   }
 
   function removePoint(pointId: string) {
-    if (activeSession.value.points.length <= 3) return
+    const session = activeSession.value
+    if (session.points.length <= 3) return
     recordHistory()
-    activeSession.value.points = activeSession.value.points.filter((point) => point.id !== pointId)
-    selectedPointId.value = activeSession.value.points[0]?.id ?? null
+    session.points = session.points.filter((point) => point.id !== pointId)
+    session.rev += 1
+    selectedPointId.value = session.points[0]?.id ?? null
     selectedStageIndex.value = 0
     persist()
   }
@@ -171,10 +209,13 @@ export const useFiringStore = defineStore('firing-studio', () => {
     const template = templates.value.find((item) => item.id === templateId)
     if (!template) return
     recordHistory()
-    activeSession.value.points = templateToPoints(template, activeSession.value.id)
-    activeSession.value.clay = template.clay
-    activeSession.value.glaze = template.glaze
-    selectedPointId.value = activeSession.value.points[0]?.id ?? null
+    const session = activeSession.value
+    const newRev = session.rev + 1
+    session.points = templateToPoints(template, session.id).map((point) => ({ ...point, rev: newRev }))
+    session.clay = template.clay
+    session.glaze = template.glaze
+    session.rev = newRev
+    selectedPointId.value = session.points[0]?.id ?? null
     selectedStageIndex.value = 0
     persist()
   }
@@ -196,43 +237,61 @@ export const useFiringStore = defineStore('firing-studio', () => {
 
   function importSamples(samples: FiringSample[]) {
     recordHistory()
-    activeSession.value.actualSamples = samples
-    activeSession.value.status = 'review'
+    const session = activeSession.value
+    const newRev = session.rev + 1
+    session.actualSamples = samples.map((sample) => ({ ...sample, rev: newRev }))
+    session.status = 'review'
+    session.rev = newRev
     persist()
   }
 
   function clearActualSamples() {
     recordHistory()
-    activeSession.value.actualSamples = []
+    const session = activeSession.value
+    session.actualSamples = []
+    session.rev += 1
     persist()
   }
 
   function setTimeOffset(offsetMin: number) {
-    activeSession.value.timeOffsetMin = Number(offsetMin.toFixed(1))
+    const session = activeSession.value
+    session.timeOffsetMin = Number(offsetMin.toFixed(1))
+    session.rev += 1
+    session.timeOffsetRev = session.rev
     persist()
   }
 
   function updateSessionMeta(patch: Partial<Pick<KilnSession, 'name' | 'kiln' | 'clay' | 'glaze' | 'firedAt' | 'status'>>) {
     recordHistory()
-    Object.assign(activeSession.value, patch)
+    const session = activeSession.value
+    Object.assign(session, patch)
+    session.rev += 1
     persist()
   }
 
   function addSession() {
     recordHistory()
     const source = activeSession.value
+    const id = crypto.randomUUID()
     const session: KilnSession = {
       ...cloneSession(source),
-      id: crypto.randomUUID(),
+      id,
       name: `新窑次 ${sessions.value.length + 1}`,
       firedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
       status: 'draft',
+      timeOffsetMin: 0,
+      timeOffsetRev: 1,
       actualSamples: [],
       points: source.points.map((point, index) => ({
         ...point,
         id: `point-new-${Date.now()}-${index}`,
+        rev: 1,
       })),
+      rev: 1,
+      baseRev: 1,
+      pendingConflicts: [],
     }
+    session.baseSnapshot = snapshotSession(session)
     sessions.value.unshift(session)
     activeSessionId.value = session.id
     selectedPointId.value = session.points[0]?.id ?? null
@@ -258,23 +317,110 @@ export const useFiringStore = defineStore('firing-studio', () => {
   }
 
   function exportSessionJson() {
-    const payload = {
-      schema: 'kiln-firing-curve/v1',
-      exportedAt: new Date().toISOString(),
-      session: activeSession.value,
-      validation: validationIssues.value,
-      timeAlignment: {
-        offsetMin: activeSession.value.timeOffsetMin,
-        basis: 'actual elapsed time + offset vs target arrival time',
-      },
+    downloadSessionJson(activeSession.value)
+  }
+
+  /** 把合并结果应用到当前窑次；失败时本地草稿不动，保留导入内容以便重试 */
+  function applyMergeOutcome(outcome: MergeOutcome): boolean {
+    if (!outcome.ok || !outcome.session) return false
+    recordHistory()
+    sessions.value = sessions.value.map((session) =>
+      session.id === activeSessionId.value ? outcome.session! : session,
+    )
+    selectedPointId.value = outcome.session.points[0]?.id ?? null
+    selectedStageIndex.value = 0
+    lastMergeStats.value = outcome.stats ?? null
+    lastMergeAt.value = Date.now()
+    persist()
+    return true
+  }
+
+  /** 导入对方离线副本（JSON）并按修订号合并；任何失败都不改动本地草稿 */
+  function importSessionJson(text: string): MergeOutcome {
+    lastImportPayload.value = text
+    lastImportError.value = null
+    const parsed = parseSessionImport(text, activeSession.value.id)
+    if (!parsed.ok) {
+      lastImportError.value = parsed.error
+      return { ok: false, error: parsed.error }
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `${activeSession.value.name}-烧成数据.json`
-    anchor.click()
-    URL.revokeObjectURL(url)
+    const outcome = mergeSessions(activeSession.value, parsed.session)
+    if (!outcome.ok) {
+      lastImportError.value = outcome.error ?? '合并失败，本地草稿未改动，可重试。'
+      return outcome
+    }
+    if (!applyMergeOutcome(outcome)) {
+      lastImportError.value = '合并结果应用失败，本地草稿未改动，可重试。'
+      return { ok: false, error: lastImportError.value }
+    }
+    lastImportPayload.value = null
+    return outcome
+  }
+
+  /** 用上次导入的内容重试合并 */
+  function retryImport(): MergeOutcome {
+    if (!lastImportPayload.value) {
+      return { ok: false, error: '没有可重试的导入内容。' }
+    }
+    return importSessionJson(lastImportPayload.value)
+  }
+
+  /** 模拟对方离线分叉：基于共同基线施加离线改动并下载副本 */
+  function simulateRemoteFork() {
+    const remote = forkRemoteSession(activeSession.value)
+    downloadSessionJson(remote)
+  }
+
+  /** 处理合并后留待确认的冲突：应用所选版本（本地回退或对方采纳） */
+  function resolveConflict(conflictId: string, winner: 'local' | 'remote') {
+    const session = activeSession.value
+    const conflict = session.pendingConflicts.find((item) => item.id === conflictId)
+    if (!conflict) return
+    recordHistory()
+    applyConflictValue(session, conflict, winner === 'local' ? conflict.localRaw : conflict.remoteRaw)
+    session.pendingConflicts = session.pendingConflicts.filter((item) => item.id !== conflictId)
+    session.rev += 1
+    sessions.value = [...sessions.value]
+    persist()
+  }
+
+  function applyConflictValue(session: KilnSession, conflict: PendingConflict, raw: unknown) {
+    if (conflict.entityType === 'point') {
+      if (raw === null) {
+        session.points = session.points.filter((point) => point.id !== conflict.entityId)
+      } else {
+        const value = raw as { timeMin: number; tempC: number }
+        const existing = session.points.find((point) => point.id === conflict.entityId)
+        const newRev = session.rev + 1
+        if (existing) {
+          session.points = session.points.map((point) =>
+            point.id === conflict.entityId ? { ...point, timeMin: value.timeMin, tempC: value.tempC, rev: newRev } : point,
+          )
+        } else {
+          session.points = [...session.points, { id: conflict.entityId, timeMin: value.timeMin, tempC: value.tempC, rev: newRev }]
+        }
+      }
+    } else if (conflict.entityType === 'sample') {
+      if (raw === null) {
+        session.actualSamples = session.actualSamples.filter((sample) => sample.id !== conflict.entityId)
+      } else {
+        const value = raw as { timeMin: number; tempC: number }
+        const existing = session.actualSamples.find((sample) => sample.id === conflict.entityId)
+        const newRev = session.rev + 1
+        if (existing) {
+          session.actualSamples = session.actualSamples.map((sample) =>
+            sample.id === conflict.entityId ? { ...sample, timeMin: value.timeMin, tempC: value.tempC, rev: newRev } : sample,
+          )
+        } else {
+          session.actualSamples = [...session.actualSamples, { id: conflict.entityId, timeMin: value.timeMin, tempC: value.tempC, rev: newRev }]
+        }
+      }
+    } else if (conflict.entityType === 'offset') {
+      session.timeOffsetMin = Number(raw)
+      session.timeOffsetRev = session.rev + 1
+    } else if (conflict.entityType === 'meta') {
+      ;(session as unknown as Record<string, unknown>)[conflict.entityId] = raw
+    }
   }
 
   return {
@@ -289,6 +435,10 @@ export const useFiringStore = defineStore('firing-studio', () => {
     validationIssues,
     canUndo,
     canRedo,
+    pendingConflictCount,
+    lastImportError,
+    lastMergeStats,
+    lastMergeAt,
     undo,
     redo,
     beginDrag,
@@ -307,5 +457,9 @@ export const useFiringStore = defineStore('firing-studio', () => {
     removeSession,
     toggleOverlay,
     exportSessionJson,
+    importSessionJson,
+    retryImport,
+    simulateRemoteFork,
+    resolveConflict,
   }
 })

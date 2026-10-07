@@ -6,6 +6,7 @@ function points(values: Array<[number, number]>, prefix: string): FiringPoint[] 
     id: `point-${prefix}-${index}`,
     timeMin,
     tempC,
+    rev: 1,
   }))
 }
 
@@ -168,6 +169,7 @@ const sessionDefinitions: Array<{
 export function createMockSessions(): KilnSession[] {
   return sessionDefinitions.map((definition, index) => {
     const sessionPoints = points(definition.pointValues, definition.id)
+    const actualSamples = createActualSamples(sessionPoints, index + 3)
     return {
       id: definition.id,
       name: definition.name,
@@ -177,8 +179,26 @@ export function createMockSessions(): KilnSession[] {
       firedAt: definition.firedAt,
       status: definition.status,
       timeOffsetMin: definition.offset,
+      timeOffsetRev: 1,
       points: sessionPoints,
-      actualSamples: createActualSamples(sessionPoints, index + 3),
+      actualSamples,
+      rev: 1,
+      baseRev: 1,
+      pendingConflicts: [],
+      baseSnapshot: {
+        rev: 1,
+        baseRev: 1,
+        name: definition.name,
+        kiln: definition.kiln,
+        clay: definition.clay,
+        glaze: definition.glaze,
+        firedAt: definition.firedAt,
+        status: definition.status,
+        timeOffsetMin: definition.offset,
+        timeOffsetRev: 1,
+        points: sessionPoints.map((point) => ({ ...point })),
+        actualSamples: actualSamples.map((sample) => ({ ...sample })),
+      },
     }
   })
 }

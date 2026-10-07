@@ -32,6 +32,7 @@ export function parseTemperatureCsv(content: string) {
         id: `csv-${Date.now()}-${index}`,
         timeMin: Number(timeMin.toFixed(2)),
         tempC: tempValue,
+        rev: 1,
       },
     ]
   })

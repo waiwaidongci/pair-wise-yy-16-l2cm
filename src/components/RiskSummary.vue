@@ -3,6 +3,7 @@ import type { RiskIssue } from '../types/firing'
 
 defineProps<{
   issues: RiskIssue[]
+  recalculated?: boolean
 }>()
 </script>
 
@@ -13,6 +14,7 @@ defineProps<{
         <strong>釉面风险检查</strong>
         <span>{{ issues.length ? `发现 ${issues.length} 项需要关注` : '当前曲线未触发风险规则' }}</span>
       </div>
+      <span v-if="recalculated" class="recalc-badge">已按新曲线重算</span>
       <span class="risk-badge" :class="{ 'risk-badge--safe': !issues.length }">
         {{ issues.length ? '需调整' : '通过' }}
       </span>
@@ -46,6 +48,7 @@ defineProps<{
 .risk-heading span { margin-top: 3px; color: #99847a; font-size: 10px; }
 .risk-badge { padding: 3px 8px; border-radius: 999px; background: #fde7e0; color: #b14733; font-size: 10px; }
 .risk-badge--safe { background: #e5f3e8; color: #34774c; }
+.recalc-badge { padding: 2px 8px; border-radius: 999px; background: #e5f3e8; color: #34774c; font-size: 10px; white-space: nowrap; }
 .risk-list { display: grid; gap: 8px; margin-top: 12px; max-height: 420px; overflow: auto; }
 .risk-item { display: grid; gap: 10px; padding: 11px; border: 1px solid #efd5cb; border-radius: 8px; background: #fff8f5; grid-template-columns: 25px 1fr; }
 .risk-item--warning { border-color: #eddbb0; background: #fffbf0; }

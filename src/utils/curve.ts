@@ -165,6 +165,7 @@ export function createActualSamples(points: FiringPoint[], seed = 1): FiringSamp
       id: `sample-${seed}-${time}`,
       timeMin: time,
       tempC: Math.max(20, target + shift + sensorLag + noise),
+      rev: 1,
     })
   }
   return samples
@@ -178,6 +179,7 @@ export function templateToPoints(template: CurveTemplate, targetSessionId: strin
   return template.points.map((point, index) => ({
     ...point,
     id: `point-${targetSessionId}-${index}-${crypto.randomUUID().slice(0, 6)}`,
+    rev: 1,
   }))
 }
 
