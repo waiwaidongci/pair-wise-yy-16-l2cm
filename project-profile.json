@@ -1,0 +1,11 @@
+{
+  "projectId": "pair-wise-yy-16",
+  "projectName": "火候陶艺窑炉烧成曲线编辑器",
+  "category": "曲线编辑与监控",
+  "businessDomain": "陶艺烧成工艺",
+  "projectForm": "完整项目",
+  "codeScope": "frontend",
+  "languages": "Vue 3, TypeScript, PrimeVue, Pinia, Vue Router, SVG, Vite",
+  "summary": "编辑升温、保温、降温阶段，拖拽关键点调整目标曲线，导入记录仪实际温度并按时间对齐比较偏差，叠加多个窑次曲线并执行开裂风险校验。",
+  "containerized": false
+}
