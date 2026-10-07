@@ -34,8 +34,26 @@ const previewSession = computed<KilnSession>(() => {
     firedAt: '',
     status: 'draft',
     timeOffsetMin: 0,
-    points: template.points.map((point, index) => ({ ...point, id: `preview-point-${index}` })),
+    timeOffsetRev: 1,
+    curveRev: 1,
+    points: template.points.map((point, index) => ({ ...point, id: `preview-point-${index}`, rev: 1 })),
     actualSamples: [],
+    syncShadow: {
+      points: template.points.map((point, index) => ({ ...point, id: `preview-point-${index}`, rev: 1 })),
+      samples: [],
+      timeOffsetMin: 0,
+      timeOffsetRev: 1,
+      mergedAt: '',
+    },
+    pendingConflicts: [],
+    analysis: {
+      curveRev: 1,
+      samplesSig: 'empty',
+      offsetRev: 1,
+      stale: false,
+      calculatedAt: '',
+      issueCount: 0,
+    },
   }
 })
 

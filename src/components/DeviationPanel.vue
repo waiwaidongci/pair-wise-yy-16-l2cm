@@ -4,6 +4,8 @@ import type { DeviationSummary } from '../types/firing'
 defineProps<{
   summary: DeviationSummary
   offsetMin: number
+  offsetRev?: number
+  stale?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -26,6 +28,9 @@ const emit = defineEmits<{
         <small>min</small>
       </label>
     </div>
+    <div v-if="stale" class="deviation-stale">
+      曲线关键点 / 时间偏移已变更（偏移 r{{ offsetRev }}），绑定旧阶段的偏差结论已失效，正在按新曲线重算。
+    </div>
     <div v-if="summary.sampleCount" class="deviation-grid">
       <div><span>平均绝对偏差</span><strong>{{ summary.meanAbs.toFixed(1) }} ℃</strong></div>
       <div><span>最大绝对偏差</span><strong>{{ summary.maxAbs.toFixed(1) }} ℃</strong></div>
@@ -46,6 +51,7 @@ const emit = defineEmits<{
 .deviation-heading > div > span { margin-top: 3px; color: #899995; font-size: 10px; }
 .deviation-heading label { display: flex; align-items: center; gap: 5px; color: #81918d; font-size: 10px; }
 .deviation-heading input { width: 68px; height: 30px; padding: 0 7px; border: 1px solid #cad6d2; border-radius: 5px; color: #3f5550; }
+.deviation-stale { margin-top: 11px; padding: 10px 12px; border-radius: 7px; background: #fff7e8; border: 1px solid #eddbb0; color: #96691b; font-size: 10px; line-height: 1.6; }
 .deviation-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
 .deviation-grid div { padding: 10px; border-radius: 7px; background: #f2f6f5; }
 .deviation-grid span, .deviation-grid strong { display: block; }

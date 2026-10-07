@@ -3,6 +3,8 @@ import type { RiskIssue } from '../types/firing'
 
 defineProps<{
   issues: RiskIssue[]
+  stale?: boolean
+  curveRev?: number
 }>()
 </script>
 
@@ -11,7 +13,7 @@ defineProps<{
     <div class="risk-heading">
       <div>
         <strong>釉面风险检查</strong>
-        <span>{{ issues.length ? `发现 ${issues.length} 项需要关注` : '当前曲线未触发风险规则' }}</span>
+        <span>曲线 r{{ curveRev }} · {{ stale ? '关键点变动，旧开裂风险结论失效，重算中' : issues.length ? `发现 ${issues.length} 项需要关注` : '当前曲线未触发风险规则' }}</span>
       </div>
       <span class="risk-badge" :class="{ 'risk-badge--safe': !issues.length }">
         {{ issues.length ? '需调整' : '通过' }}

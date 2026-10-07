@@ -1,12 +1,15 @@
 import type { FiringSample } from '../types/firing'
 
-export function parseTemperatureCsv(content: string) {
+/** CSV \u89E3\u6790\u51FA\u7684\u91C7\u6837\u5C1A\u672A\u5206\u914D\u4FEE\u8BA2\u53F7\uFF0C\u5BFC\u5165 store \u65F6\u7EDF\u4E00\u8D4B rev */
+type ParsedSample = Omit<FiringSample, 'rev'>
+
+export function parseTemperatureCsv(content: string): ParsedSample[] {
   const lines = content
     .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-  if (lines.length < 2) return [] as FiringSample[]
+  if (lines.length < 2) return []
   const headers = lines[0].split(',').map((value) => value.trim().toLowerCase())
   const timeIndex = headers.findIndex((header) =>
     ['time', 'minute', 'minutes', '时间', '分钟', '经过时间'].includes(header),

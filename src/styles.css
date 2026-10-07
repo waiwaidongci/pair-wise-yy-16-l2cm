@@ -55,6 +55,20 @@ button, input { font: inherit; }
 .nav-item:hover { color: #fff; background: rgba(255,255,255,.055); }
 .nav-item--active { color: #fff; background: linear-gradient(90deg, rgba(198,91,51,.34), rgba(198,91,51,.08)); box-shadow: inset 3px 0 #d4794f; }
 .nav-item i { font-size: 15px; }
+.nav-badge {
+  display: grid;
+  min-width: 17px;
+  height: 17px;
+  margin-left: auto;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #c65b33;
+  color: #fff;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+}
 .kiln-card {
   display: flex;
   position: absolute;

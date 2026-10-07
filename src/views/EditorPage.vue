@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Select from 'primevue/select'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
+import Tag from 'primevue/tag'
 import { useFiringStore } from '../stores/firingStore'
 import CurveChart from '../components/CurveChart.vue'
 import StagePanel from '../components/StagePanel.vue'
@@ -26,6 +27,16 @@ const deviation = computed(() =>
 )
 const sessionOptions = computed(() =>
   store.sessions.map((session) => ({ label: session.name, value: session.id })),
+)
+
+// 曲线关键点一变，阶段划分跟着变：旧偏差 / 开裂风险结论失效后按新曲线重算
+watch(
+  () => [activeSession.value.id, activeSession.value.curveRev, activeSession.value.timeOffsetRev, activeSession.value.actualSamples.length],
+  (_newValue, _oldValue, onCleanup) => {
+    if (!activeSession.value.analysis?.stale) return
+    const timer = window.setTimeout(() => store.recomputeAnalysis(activeSession.value.id), 350)
+    onCleanup(() => window.clearTimeout(timer))
+  },
 )
 
 function updateSelectedStage(index: number, field: 'duration' | 'targetTemp', value: number) {
@@ -70,12 +81,20 @@ function saveTemplate() {
       </div>
     </section>
 
+    <div class="rev-strip">
+      <Tag :value="`曲线修订 r${activeSession.curveRev}`" severity="danger" />
+      <Tag :value="`时间偏移 r${activeSession.timeOffsetRev}（${activeSession.timeOffsetMin} min）`" severity="info" />
+      <Tag :value="`采样 ${activeSession.actualSamples.length} 点`" severity="secondary" />
+      <Tag v-if="activeSession.pendingConflicts.length" :value="`待确认 ${activeSession.pendingConflicts.length} 项`" severity="warn" />
+      <Tag v-if="activeSession.analysis.stale" value="旧结论已失效，按新曲线重算中…" severity="warn" />
+    </div>
+
     <section class="editor-grid">
       <article class="chart-card">
         <div class="chart-toolbar">
           <div>
             <strong>目标烧成曲线</strong>
-            <span>拖动关键点可同时调整温度与到达时间</span>
+            <span>拖动关键点可同时调整温度与到达时间，改动会递增修订号</span>
           </div>
           <div class="chart-metrics">
             <span>关键点 <strong>{{ activeSession.points.length }}</strong></span>
@@ -111,11 +130,13 @@ function saveTemplate() {
         <DeviationPanel
           :summary="deviation"
           :offset-min="activeSession.timeOffsetMin"
+          :offset-rev="activeSession.timeOffsetRev"
+          :stale="activeSession.analysis.stale"
           @update-offset="store.setTimeOffset"
         />
       </article>
       <article class="detail-card">
-        <RiskSummary :issues="validationIssues" />
+        <RiskSummary :issues="validationIssues" :stale="activeSession.analysis.stale" :curve-rev="activeSession.curveRev" />
       </article>
     </section>
 
@@ -131,3 +152,7 @@ function saveTemplate() {
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+.rev-strip { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+</style>

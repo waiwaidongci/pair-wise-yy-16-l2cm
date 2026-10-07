@@ -155,7 +155,7 @@ export function calculateDeviation(
 
 export function createActualSamples(points: FiringPoint[], seed = 1): FiringSample[] {
   const end = Math.max(...points.map((point) => point.timeMin))
-  const samples: FiringSample[] = []
+  const samples: Array<{ id: string; timeMin: number; tempC: number }> = []
   for (let time = 0; time <= end; time += 5) {
     const target = interpolateTemperature(points, time)
     const shift = Math.sin((time + seed * 7) / 35) * 12
@@ -167,14 +167,14 @@ export function createActualSamples(points: FiringPoint[], seed = 1): FiringSamp
       tempC: Math.max(20, target + shift + sensorLag + noise),
     })
   }
-  return samples
+  // 初始 mock 采样没有修订号，由 store 的 ensureRevisions 统一补齐
+  return samples as unknown as FiringSample[]
 }
-
 export function cloneSession(session: KilnSession): KilnSession {
   return JSON.parse(JSON.stringify(session)) as KilnSession
 }
 
-export function templateToPoints(template: CurveTemplate, targetSessionId: string): FiringPoint[] {
+export function templateToPoints(template: CurveTemplate, targetSessionId: string) {
   return template.points.map((point, index) => ({
     ...point,
     id: `point-${targetSessionId}-${index}-${crypto.randomUUID().slice(0, 6)}`,

@@ -71,12 +71,12 @@ const comparisonRows = computed(() =>
       </div>
       <div class="comparison-table">
         <div class="comparison-row comparison-row--header">
-          <span>窑次</span><span>泥料 / 釉料</span><span>峰值</span><span>平均偏差</span><span>最大偏差</span><span>状态</span>
+          <span>窑次</span><span>泥料 / 釉料</span><span>峰值（曲线 r）</span><span>平均偏差</span><span>最大偏差</span><span>状态</span>
         </div>
         <div v-for="row in comparisonRows" :key="row.session.id" class="comparison-row">
           <strong>{{ row.session.name }}</strong>
           <span>{{ row.session.clay }} / {{ row.session.glaze }}</span>
-          <span>{{ row.peak }} ℃</span>
+          <span>{{ row.peak }} ℃ · r{{ row.session.curveRev }}</span>
           <span>{{ row.deviation.meanAbs.toFixed(1) }} ℃</span>
           <span>{{ row.deviation.maxAbs.toFixed(1) }} ℃</span>
           <Tag :value="row.session.status === 'completed' ? '已完成' : row.session.status === 'review' ? '待复核' : '草稿'" :severity="row.session.status === 'completed' ? 'success' : row.session.status === 'review' ? 'warn' : 'secondary'" />

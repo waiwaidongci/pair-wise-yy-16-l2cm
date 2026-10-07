@@ -1,12 +1,14 @@
-import type { CurveTemplate, FiringPoint, KilnSession } from '../types/firing'
+import type { CurveTemplate, FiringPoint, KilnSession, LegacyKilnSession } from '../types/firing'
 import { createActualSamples } from '../utils/curve'
 
-function points(values: Array<[number, number]>, prefix: string): FiringPoint[] {
+// 旧窑次数据没有修订号：points 直接产出无 rev 的结构，
+// 由 store 载入时调用 ensureRevisions 按现有内容补齐。
+function points(values: Array<[number, number]>, prefix: string) {
   return values.map(([timeMin, tempC], index) => ({
     id: `point-${prefix}-${index}`,
     timeMin,
     tempC,
-  }))
+  })) as unknown as FiringPoint[]
 }
 
 function templatePoints(values: Array<[number, number]>) {
@@ -165,7 +167,7 @@ const sessionDefinitions: Array<{
   },
 ]
 
-export function createMockSessions(): KilnSession[] {
+export function createMockSessions(): LegacyKilnSession[] {
   return sessionDefinitions.map((definition, index) => {
     const sessionPoints = points(definition.pointValues, definition.id)
     return {
@@ -179,6 +181,6 @@ export function createMockSessions(): KilnSession[] {
       timeOffsetMin: definition.offset,
       points: sessionPoints,
       actualSamples: createActualSamples(sessionPoints, index + 3),
-    }
+    } as unknown as LegacyKilnSession
   })
 }

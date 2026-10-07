@@ -4,3 +4,4 @@ dist
 *.log
 node_modules/.runtime
 .DS_Store
+.store-check

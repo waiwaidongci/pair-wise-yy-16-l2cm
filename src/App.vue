@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
+import { useFiringStore } from './stores/firingStore'
 
 const route = useRoute()
 const router = useRouter()
+const store = useFiringStore()
+const { pendingConflictCount } = storeToRefs(store)
 const navItems = [
   { path: '/editor', label: '曲线编辑', icon: 'pi pi-chart-line' },
   { path: '/compare', label: '窑次对比', icon: 'pi pi-chart-scatter' },
   { path: '/sessions', label: '窑次管理', icon: 'pi pi-database' },
+  { path: '/sync', label: '同步中心', icon: 'pi pi-sync' },
   { path: '/templates', label: '曲线模板', icon: 'pi pi-copy' },
 ]
 const activePath = computed(() => navItems.find((item) => route.path.startsWith(item.path))?.path ?? '/editor')
@@ -37,6 +42,7 @@ const activeLabel = computed(() => navItems.find((item) => item.path === activeP
         >
           <i :class="item.icon" />
           <span>{{ item.label }}</span>
+          <em v-if="item.path === '/sync' && pendingConflictCount" class="nav-badge">{{ pendingConflictCount }}</em>
         </button>
       </nav>
       <div class="kiln-card">
